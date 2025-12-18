@@ -1,0 +1,107 @@
+apiVersion: batch/v1
+kind: CronJob 
+metadata:
+  name: alarmservice
+spec: 
+  schedule: "0 0 * * *"
+  successfulJobsHistoryLimit: 1 
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy : Replace
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: alarmservice
+              image: ipredictdev.azurecr.io/alarmservice:##version##
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 8080
+              securityContext:
+               runAsUser: 0
+               privileged: true
+              env:
+                - name: "ASPNETCORE_ENVIRONMENT"
+                  value: uat
+                - name: "ImageVersion"
+                  value: ##version##
+                - name: "ServiceName"
+                  value: assetmanagementservice
+                - name: "SecretName"
+                  value: ipredict-config
+                - name: MountPath
+                  value: clusterConfig
+              volumeMounts:
+                - name: secrets
+                  mountPath: /app/clusterConfig
+                  readOnly: true
+          imagePullSecrets:
+            - name: regcred
+          volumes:
+            - name: secrets
+              secret:
+                secretName: clusterconfig
+          restartPolicy: OnFailure
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alarmservice
+  labels:
+    app: alarmservice
+    tier: backend
+    role: master
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: alarmservice
+      tier: backend
+      role: master
+  template:
+    metadata:
+      labels:
+        app: alarmservice
+        tier: backend
+        role: master
+    spec:
+      containers:
+      - name: alarmservice
+        image: ipredictdev.azurecr.io/alarmservice:##version##
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - name: "ASPNETCORE_ENVIRONMENT"
+          value: uat
+        - name: "ImageVersion"
+          value: ##version##
+        - name: "ServiceName"
+          value: alarm
+        - name: "SecretName"
+          value: ipredict-config
+        - name: MountPath
+          value: clusterConfig
+        volumeMounts:
+        - name: secrets
+          mountPath: /app/clusterConfig
+          readOnly: true
+      volumes:
+      - name: secrets
+        secret:
+          secretName: clusterconfig
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: alarmservice
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: alarmservice
+    tier: backend
+    role: master
